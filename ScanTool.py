@@ -1,18 +1,25 @@
 import aiohttp
+import aiofiles
 import asyncio
 import os
 import time
 import click
+import json
+
+UA = {
+	"User-Agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36"
+}	
 
 class Scan(object):
-	def __init__(self, base_url, dict_path, max_concurrency=10, timeout=2, queue_cap=50):
+	def __init__(self, base_url, dict_path, headers, max_concurrency=10, timeout=2, queue_cap=50):
 		self.q = asyncio.Queue(queue_cap)
 		self.s = asyncio.Queue()
 		self.max_concurrency = max_concurrency
 		self.timeout = timeout
 		self.base_url = base_url
 		self.dict_path = dict_path
-		self.urls = []
+		self.headers = headers
+		self.lines = 0
 
 	def readFromFolder(self):
 		files = os.listdir(self.dict_path)
@@ -24,29 +31,36 @@ class Scan(object):
 			suffix = suffix[1:]
 		return "{base_url}/{suffix}".format(base_url=self.base_url, suffix=suffix)
 
+	async def fetch(self, session, url):
+		async with session.head(url, timeout=self.timeout) as resp:
+			return resp.status
+
 	async def crawl(self, name):
-		while True:
-			url = await self.q.get()
-			url = self.urljoin(url)
-			try:
-				async with aiohttp.ClientSession() as session:
-					async with session.head(url, timeout=self.timeout) as resp:
-						if resp.status == 200:
-							print("Success ", url)
-			except Exception as e:
-				self.s.put_nowait(False)
-			finally:
-				# must call task_done or else block in join
-				self.q.task_done()
+		# each crawl has a session
+		async with aiohttp.ClientSession(headers=self.headers) as session:
+			while True:
+				url = await self.q.get()
+				url = self.urljoin(url)
+				try:
+					status = await self.fetch(session, url)
+					if status == 200:
+						print("Success ", url)
+				except Exception as e:
+					self.s.put_nowait(False)
+				finally:
+					# must call task_done or else block in join
+					self.q.task_done()
 
 	async def put(self):
 		files = self.readFromFolder()
 		for file in files:
-			with open(file) as f:
-				urls = f.read().split("\n")
-			print("File {}, URL Count {}".format(os.path.split(file)[1], len(urls)))
-			while len(urls) > 0:
-				await self.q.put(urls.pop())
+			async with aiofiles.open(file, mode="r") as f: 
+				print("File {}".format(os.path.split(file)[1]))
+				async for line in f:
+					self.lines += 1
+					# delete character "\n"
+					await self.q.put(line[:-1])
+		print("Total scan lines ", self.lines)
 		# print("Put Out!")
 
 	async def run(self):
@@ -65,7 +79,7 @@ class Scan(object):
 		loop.close()
 
 
-def banner(base_url, dict_path, max_concurrency, timeout, queue_cap):
+def banner(base_url, dict_path, headers, max_concurrency, timeout, queue_cap):
 	print('''
                  ___           ___           ___                       ___         ___   
                 /  /\\         /  /\\         /__/\\        ___          /  /\\       /  /\\  
@@ -81,6 +95,7 @@ def banner(base_url, dict_path, max_concurrency, timeout, queue_cap):
 		''')
 	print("Base Url:", base_url)
 	print("Dictionary Folder:", dict_path)
+	print("Headers:", headers)
 	print("Max Concurrency:", max_concurrency)
 	print("Timeout:", timeout)
 	print("Queue Capacity:", queue_cap)
@@ -90,19 +105,21 @@ def banner(base_url, dict_path, max_concurrency, timeout, queue_cap):
 @click.command()
 @click.option("--baseUrl", "-u", required=True, help="Basice URL of splicing")
 @click.option("--dictPath", "-p", required=True, help="Dictionary path")
+@click.option("--customerHeaders", "-h", default=json.dumps(UA), help="Customer headers")
 @click.option("--maxConcurrency", "-c", default=10, show_default=True, help="Maximum concurrent")
 @click.option("--timeout", "-t", default=2, show_default=True, help="Timeout time")
 @click.option("--queueCap", "-q", default=50, show_default=True, help="Queeu capacity")
-def scan(baseurl, dictpath, maxconcurrency, timeout, queuecap):
+def scan(baseurl, dictpath, customerheaders, maxconcurrency, timeout, queuecap):
 	'''
 	Web background scanning tool based on Python coroutine
 	'''
-	banner(baseurl, dictpath, maxconcurrency, timeout, queuecap)
+	headers = json.loads(customerheaders)
+	banner(baseurl, dictpath, headers, maxconcurrency, timeout, queuecap)
 	start = time.perf_counter()
-	sc = Scan(baseurl, dictpath, maxconcurrency, timeout, queuecap)
+	sc = Scan(baseurl, dictpath, headers, maxconcurrency, timeout, queuecap)
 	sc.loop()
 	print("Use time {}s".format(time.perf_counter() - start))
 
+
 if __name__ == '__main__':
 	scan()
-	
