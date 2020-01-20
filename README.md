@@ -7,6 +7,7 @@ Web background scanning tool based on Python coroutine
 ## Options  
 * -u, --baseUrl TEXT            Basice URL of splicing  [required]  
 * -p, --dictPath TEXT           Dictionary path  [required]  
+* -h, --customerHeaders TEXT    Customer headers  
 * -c, --maxConcurrency INTEGER  Maximum concurrent  [default: 10]  
 * -t, --timeout INTEGER         Timeout time  [default: 2]  
 * -q, --queueCap INTEGER        Queeu capacity  [default: 50]  
@@ -14,7 +15,7 @@ Web background scanning tool based on Python coroutine
 ## Show
 ![](https://github.com/Ri773r/RSniff/blob/master/show.png)
 # Todo
-- [ ] Customer headers
-- [ ] Asynchronous read file  
+- [x] ~~Customer headers~~  
+- [x] ~~Asynchronous read file~~    
 # License
 ![](https://img.shields.io/badge/License-MIT-blue.svg)
