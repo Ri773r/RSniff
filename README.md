@@ -15,4 +15,6 @@ Web background scanning tool based on Python coroutine
 ![](https://github.com/Ri773r/RSniff/blob/master/show.png)
 # Todo
 - [ ] Customer headers
-- [ ] Asynchronous read file
+- [ ] Asynchronous read file  
+# License
+![](https://img.shields.io/badge/License-MIT-blue.svg)
